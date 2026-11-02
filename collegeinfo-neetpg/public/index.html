@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<title>NEET PG Institute Information | collegeinfo.neetpg</title>
+<meta name="description" content="Search and compare NEET PG institutes by course, location, stipend, bond and BED. Secure premium access to the complete institute dataset.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://collegeinfo-neetpg.pages.dev/">
+<meta property="og:title" content="NEET PG Institute Information">
+<meta property="og:description" content="Search and compare NEET PG institutes by stipend, bond and more.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+
+<header class="nav"><div class="wrap">
+  <a class="brand" href="#home" id="brand">collegeinfo<span>.neetpg</span></a>
+  <nav class="navbtns" aria-label="Primary">
+    <button type="button" class="navbtn" data-route="home" aria-current="page">Home</button>
+    <button type="button" class="navbtn" data-route="premium">Premium</button>
+    <button type="button" class="navbtn" data-route="contact">Contact</button>
+  </nav>
+</div></header>
+
+<main class="wrap">
+
+  <!-- ============ HOME ============ -->
+  <section id="page-home" class="view" aria-labelledby="h-home">
+    <div class="hero">
+      <h1 id="h-home">NEET PG Institute Information</h1>
+      <p>Search and compare institutes by stipend, bond and more.</p>
+    </div>
+
+    <div id="status" class="status" role="status" aria-live="polite">
+      <div class="spin" aria-hidden="true"></div>
+      <h2>Loading the latest data…</h2>
+      <p>Fetching the college list.</p>
+    </div>
+
+    <div id="app" hidden>
+      <section class="panel" aria-labelledby="h-filters">
+        <div class="fhead">
+          <h2 id="h-filters">Filters</h2>
+          <span class="badge" id="activeBadge" hidden></span>
+          <button type="button" class="btn primary" id="clearAll">Clear All Filters</button>
+        </div>
+
+        <div class="fgroup">
+          <div class="search">
+            <label class="sr" for="q">Search institute</label>
+            <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>
+            <input class="input" id="q" type="text" placeholder="Search institute — e.g. delhi, medical college, aiims" autocomplete="off" spellcheck="false">
+            <button type="button" class="x" id="qx" aria-label="Clear search" hidden>×</button>
+          </div>
+        </div>
+
+        <div class="fgroup">
+          <div class="grid">
+            <div class="field" id="f-course"></div>
+            <div class="field" id="f-state"></div>
+          </div>
+        </div>
+
+        <div class="fgroup">
+          <div class="gtitle">Stipend (greater than)</div>
+          <div class="grid">
+            <div class="field"><label class="flabel" for="n-s1">Stipend Year 1</label><div class="numwrap"><input class="input" id="n-s1" inputmode="decimal" autocomplete="off" placeholder="e.g. 50000"></div></div>
+            <div class="field"><label class="flabel" for="n-s2">Stipend Year 2</label><div class="numwrap"><input class="input" id="n-s2" inputmode="decimal" autocomplete="off" placeholder="e.g. 50000"></div></div>
+            <div class="field"><label class="flabel" for="n-s3">Stipend Year 3</label><div class="numwrap"><input class="input" id="n-s3" inputmode="decimal" autocomplete="off" placeholder="e.g. 50000"></div></div>
+          </div>
+        </div>
+
+        <div class="fgroup">
+          <div class="grid">
+            <div class="field" id="f-by"></div>
+            <div class="field" id="f-bp"></div>
+            <div class="field"><label class="flabel" for="n-bed">BED (greater than)</label><div class="numwrap"><input class="input" id="n-bed" inputmode="decimal" autocomplete="off" placeholder="e.g. 50000"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results" id="results" aria-labelledby="h-count">
+        <div class="rhead">
+          <div class="count" id="h-count" aria-live="polite"><span id="countNum">0</span> matching records<small id="rangeTxt"></small></div>
+          <div class="sortbar" role="group" aria-label="Sort results, high to low">
+            <span class="sortlab">Sort</span>
+            <button type="button" class="sbtn" data-sort="s1" aria-pressed="false">Stipend Year 1</button>
+            <button type="button" class="sbtn" data-sort="s2" aria-pressed="false">Stipend Year 2</button>
+            <button type="button" class="sbtn" data-sort="s3" aria-pressed="false">Stipend Year 3</button>
+            <button type="button" class="sbtn" data-sort="by" aria-pressed="false">Bond Years</button>
+            <button type="button" class="sbtn" data-sort="bed" aria-pressed="false">BED</button>
+          </div>
+        </div>
+
+        <div class="tablewrap" id="tablewrap">
+          <table>
+            <caption class="sr">NEET PG college information</caption>
+            <thead><tr>
+              <th scope="col">Course</th><th scope="col">State</th><th scope="col">Institute</th>
+              <th scope="col" class="num">Stipend Year 1</th><th scope="col" class="num">Stipend Year 2</th><th scope="col" class="num">Stipend Year 3</th>
+              <th scope="col" class="num">Bond Years</th><th scope="col" class="num">Bond Penalty</th><th scope="col" class="num">BED</th>
+            </tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty" id="empty" hidden>
+            <h3>No matching records</h3>
+            <p>Try removing a filter or shortening your search.</p>
+            <button type="button" class="btn primary" id="emptyClear">Clear All Filters</button>
+          </div>
+        </div>
+
+        <div class="pager" id="pager">
+          <div class="info" id="pagerInfo"></div>
+          <div class="mid">
+            <button type="button" class="btn ghost" id="prev">‹ Previous</button>
+            <span class="pg" id="pgTxt"></span>
+            <button type="button" class="btn ghost" id="next">Next ›</button>
+          </div>
+        </div>
+  
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ PREMIUM ============ -->
+  <section id="page-premium" class="view cpage" aria-labelledby="h-premium" hidden>
+    <h1 id="h-premium">Premium access</h1>
+    <div class="premium-card">
+      <p class="premium-lead">Unlock the complete NEET PG institute dataset, including institutes beginning with D–Z.</p>
+      <div id="auth-signed-out" class="premium-state">
+        <p>Sign in with Google to create your account and continue.</p>
+        <button type="button" class="btn primary" id="googleSignIn">Continue with Google</button>
+      </div>
+      <div id="auth-needs-username" class="premium-state" hidden>
+        <p id="signedInEmail"></p>
+        <label class="flabel" for="usernameInput">Choose a username</label>
+        <input class="input" id="usernameInput" maxlength="30" autocomplete="username" placeholder="3–30 letters, numbers or underscores">
+        <button type="button" class="btn primary" id="saveUsername">Save username</button>
+        <p class="auth-error" id="usernameError" role="alert"></p>
+        <button type="button" class="btn ghost" id="signOutBeforeUsername">Sign Out</button>
+      </div>
+      <div id="auth-free" class="premium-state" hidden>
+        <p class="account-line">Signed in as <strong id="accountUsername"></strong></p>
+        <p class="premium-price">₹1 <span>one-time lifetime access</span></p>
+        <button type="button" class="btn primary" id="buyPremium">Unlock Premium · ₹1</button>
+        <button type="button" class="btn ghost" id="signOutFree">Sign Out</button>
+        <p class="auth-error" id="paymentError" role="alert"></p>
+      </div>
+      <div id="auth-premium" class="premium-state" hidden>
+        <p class="account-line">Signed in as <strong id="premiumUsername"></strong></p>
+        <p class="verified"><span aria-hidden="true">✓</span> Premium access verified</p>
+        <button type="button" class="btn ghost" id="signOutPremium">Sign Out</button>
+      </div>
+      <div id="auth-loading" class="premium-state"><div class="spin" aria-hidden="true"></div><p>Checking account…</p></div>
+    </div>
+  </section>
+
+  <!-- ============ CONTACT ============ -->
+  <section id="page-contact" class="view cpage" aria-labelledby="h-contact" hidden>
+    <h1 id="h-contact">Contact</h1>
+    <div class="about">
+      <img class="avatar" src="/assets/medical-profile.svg" alt="Medical illustration">
+      <div class="who"><div class="lab2">Contact</div></div>
+      <div class="links">
+        <a href="mailto:keshavpanchal9920@gmail.com"><span>Email</span>keshavpanchal9920@gmail.com</a>
+        <a href="https://www.linkedin.com/in/keshav-p-277971238" target="_blank" rel="noopener noreferrer"><span>LinkedIn</span>keshav-p-277971238</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/assets/account.js" defer></script>
+<script src="/assets/app.js" defer></script>
+</body>
+</html>
