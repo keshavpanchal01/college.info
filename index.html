@@ -74,6 +74,18 @@ td.st{white-space:nowrap}
 .spin{width:22px;height:22px;margin:0 auto 14px;border:2px solid var(--line);border-top-color:var(--fg);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.page{max-width:720px}
+.page h2{margin:28px 0 6px;font-size:18px;font-weight:600}
+.page p,.page li{color:var(--muted);font-size:15px;line-height:1.7;margin:0 0 12px}
+.page ul{padding-left:20px;margin:0 0 12px}
+.page a{color:var(--fg);text-decoration:underline;text-underline-offset:3px}
+.page form{display:grid;gap:14px;margin-top:20px}
+.page textarea{width:100%;min-height:140px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font:inherit;resize:vertical}
+.page textarea:focus-visible{outline:2px solid #737373;outline-offset:1px}
+.page .btn{justify-self:start;height:40px;padding:0 20px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:600;cursor:pointer}
+.page .btn:disabled{opacity:.5;cursor:default}
+.page .note{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:12px 14px;margin-top:16px;font-size:14px}
+nav a.active{color:var(--fg);background:#171717}
 footer{border-top:1px solid var(--line)}
 footer .container{display:flex;flex-wrap:wrap;gap:8px 20px;padding-block:20px}
 footer a{color:var(--muted);font-size:13px}
@@ -83,15 +95,16 @@ footer a:hover{color:var(--fg)}
 <body>
 <header>
   <div class="container">
-    <a class="brand" href="./">Seatwise</a>
+    <a class="brand" href="#home">Seatwise</a>
     <nav aria-label="Main">
-      <a class="active" href="./" aria-current="page">Home</a>
-      <a href="https://collegeinfo.lovable.app/contact">Contact</a>
+      <a id="nav-home" href="#home">Home</a>
+      <a id="nav-contact" href="#contact">Contact</a>
     </nav>
   </div>
 </header>
 
 <main class="container">
+<div id="home">
   <h1>NEET PG institute information.</h1>
   <p class="sub">Search and compare institutes by stipend, bond and more.</p>
 
@@ -142,15 +155,18 @@ footer a:hover{color:var(--fg)}
       <button type="button" id="next">Next ›</button>
     </div>
   </div>
+</div>
+
+<section id="page" class="page" hidden></section>
 </main>
 
 <footer>
   <div class="container">
-    <a href="https://collegeinfo.lovable.app/terms">Terms and Conditions</a>
-    <a href="https://collegeinfo.lovable.app/privacy">Privacy Policy</a>
-    <a href="https://collegeinfo.lovable.app/refunds">Cancellation and Refund Policy</a>
-    <a href="https://collegeinfo.lovable.app/shipping">Shipping and Exchange Policy</a>
-    <a href="https://collegeinfo.lovable.app/contact">Contact Us</a>
+    <a href="#terms">Terms and Conditions</a>
+    <a href="#privacy">Privacy Policy</a>
+    <a href="#refunds">Cancellation and Refund Policy</a>
+    <a href="#shipping">Shipping and Exchange Policy</a>
+    <a href="#contact">Contact Us</a>
   </div>
 </footer>
 
@@ -305,6 +321,83 @@ footer a:hover{color:var(--fg)}
   $('prev').addEventListener('click', function(){ state.page--; render(); window.scrollTo(0, 0); });
   $('next').addEventListener('click', function(){ state.page++; render(); window.scrollTo(0, 0); });
 
+  /* ---- Local pages and hash routing (no external navigation) ---- */
+  // Set this to your own address to enable the contact form. Leave empty to show a notice instead.
+  var CONTACT_EMAIL = '';
+
+  var PAGES = {
+    contact: { title: 'Contact', html: function(){
+      var has = !!CONTACT_EMAIL;
+      return '<h1>Contact</h1><p class="sub">Questions, corrections or feedback about the listings? Send us a message.</p>' +
+        (has ? '<p>You can also write to <strong style="color:var(--fg)">' + esc(CONTACT_EMAIL) + '</strong>.</p>' : '') +
+        '<form id="cform" novalidate>' +
+        '<div class="field"><label for="cname">Your name</label><input id="cname" type="search" autocomplete="name"></div>' +
+        '<div class="field"><label for="cmail">Your email</label><input id="cmail" type="search" autocomplete="email"></div>' +
+        '<div class="field"><label for="cmsg">Message</label><textarea id="cmsg"></textarea></div>' +
+        '<button class="btn" type="submit"' + (has ? '' : ' disabled') + '>Send message</button>' +
+        '<div id="cresult" role="status"></div></form>' +
+        (has ? '' : '<div class="note">The contact address has not been configured yet. Set <code>CONTACT_EMAIL</code> in index.html to enable this form.</div>');
+    }},
+    terms: { title: 'Terms and Conditions', html: function(){ return '<h1>Terms and Conditions</h1>' +
+      '<p class="sub">Please read these terms before using Seatwise.</p>' +
+      '<h2>About the service</h2><p>Seatwise lists NEET PG institute information such as stipend, bond and bed counts so that candidates can search and compare institutes.</p>' +
+      '<h2>Accuracy of information</h2><p>The data comes from published stipend and bond documents and may contain errors or be out of date. Always confirm details with the institute or the official notification before making a decision.</p>' +
+      '<h2>Use of the site</h2><ul><li>You may use the site for personal, non-commercial research.</li><li>You may not copy the site at scale or use it in a way that disrupts it.</li></ul>' +
+      '<h2>Liability</h2><p>The information is provided as is, without warranties. Seatwise is not responsible for decisions made on the basis of it.</p>' +
+      '<h2>Changes</h2><p>These terms may be updated from time to time. Continued use of the site means you accept the current terms.</p>'; }},
+    privacy: { title: 'Privacy Policy', html: function(){ return '<h1>Privacy Policy</h1>' +
+      '<p class="sub">How Seatwise treats your information.</p>' +
+      '<h2>What we collect</h2><p>The listings page runs entirely in your browser. Your searches and filters are not sent anywhere or stored.</p>' +
+      '<h2>Messages you send</h2><p>If you contact us, we use the details you provide only to reply to you.</p>' +
+      '<h2>Third parties</h2><p>Your host may keep standard server logs, such as IP address and browser type, as part of delivering the site.</p>' +
+      '<h2>Questions</h2><p>For anything about privacy, use the <a href="#contact">Contact</a> page.</p>'; }},
+    refunds: { title: 'Cancellation and Refund Policy', html: function(){ return '<h1>Cancellation and Refund Policy</h1>' +
+      '<p class="sub">Payments and refunds.</p>' +
+      '<h2>Current status</h2><p>The institute listings on Seatwise are free to use, so there is nothing to cancel and no payment to refund.</p>' +
+      '<h2>If paid features are added</h2><p>Cancellation and refund terms will be published here before any paid feature becomes available.</p>' +
+      '<h2>Questions</h2><p>Reach us through the <a href="#contact">Contact</a> page.</p>'; }},
+    shipping: { title: 'Shipping and Exchange Policy', html: function(){ return '<h1>Shipping and Exchange Policy</h1>' +
+      '<p class="sub">Physical goods and exchanges.</p>' +
+      '<h2>Digital service only</h2><p>Seatwise is a digital information service. It does not sell or ship physical products, so no shipping or exchanges apply.</p>' +
+      '<h2>Questions</h2><p>Reach us through the <a href="#contact">Contact</a> page.</p>'; }}
+  };
+
+  function route(){
+    var h = (location.hash || '#home').replace(/^#/, '');
+    var p = PAGES.hasOwnProperty(h) ? PAGES[h] : null;
+    $('home').hidden = !!p;
+    $('page').hidden = !p;
+    $('nav-home').classList.toggle('active', !p);
+    $('nav-contact').classList.toggle('active', h === 'contact');
+    if (p){
+      $('page').innerHTML = p.html();
+      document.title = p.title + ' — Seatwise';
+      if (h === 'contact') bindContact();
+    } else {
+      document.title = 'Seatwise — NEET PG institute information';
+    }
+    window.scrollTo(0, 0);
+  }
+
+  function bindContact(){
+    var f = $('cform');
+    f.addEventListener('submit', function(e){
+      e.preventDefault();
+      var r = $('cresult'), name = $('cname').value.trim(), mail = $('cmail').value.trim(), msg = $('cmsg').value.trim();
+      if (!CONTACT_EMAIL){ return; }
+      if (!name || !/^\S+@\S+\.\S+$/.test(mail) || !msg){
+        r.textContent = 'Please enter your name, a valid email and a message.';
+        return;
+      }
+      var body = msg + '\n\nFrom: ' + name + ' <' + mail + '>';
+      var href = 'mailto:' + encodeURIComponent(CONTACT_EMAIL) + '?subject=' + encodeURIComponent('Seatwise enquiry from ' + name) + '&body=' + encodeURIComponent(body);
+      r.textContent = 'Your email app should open with the message ready to send. If it does not, write to ' + CONTACT_EMAIL + '.';
+      location.href = href;
+    });
+  }
+
+  window.addEventListener('hashchange', route);
+  route();
   load();
 })();
 </script>
