@@ -86,6 +86,20 @@ td.st{white-space:nowrap}
 .page .btn:disabled{opacity:.5;cursor:default}
 .page .note{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:12px 14px;margin-top:16px;font-size:14px}
 nav a.active{color:var(--fg);background:#171717}
+.pair{display:grid;grid-template-columns:96px 1fr;gap:8px}
+.clearbtn{height:40px;padding:0 16px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+.clearbtn:hover{background:#171717}
+.contact{text-align:center;padding-block:40px}
+.contact .ico{font-size:56px;line-height:1;margin-bottom:12px}
+.contact a{color:var(--fg);text-decoration:underline;text-underline-offset:3px;font-size:18px}
+.prem .row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0}
+.prem .who{font-size:18px;font-weight:600;color:var(--fg)}
+.prem .tick{color:#4ade80;font-weight:700;margin-left:6px}
+.prem .btn.sec{background:var(--bg);color:var(--fg);border-color:var(--line)}
+.prem .msg{margin-top:12px;font-size:14px;color:var(--muted)}
+.prem .msg.err{color:#ff6b6b}
+.prem .msg.ok{color:#4ade80}
+.prem .field{max-width:360px}
 footer{border-top:1px solid var(--line)}
 footer .container{display:flex;flex-wrap:wrap;gap:8px 20px;padding-block:20px}
 footer a{color:var(--muted);font-size:13px}
@@ -98,6 +112,7 @@ footer a:hover{color:var(--fg)}
     <a class="brand" href="#home">Seatwise</a>
     <nav aria-label="Main">
       <a id="nav-home" href="#home">Home</a>
+      <a id="nav-premium" href="#premium">Premium</a>
       <a id="nav-contact" href="#contact">Contact</a>
     </nav>
   </div>
@@ -118,16 +133,27 @@ footer a:hover{color:var(--fg)}
     <div class="filters">
       <div class="field"><label for="q">Search institute</label>
         <input id="q" type="search" autocomplete="off"></div>
-      <div class="field"><label for="stip">Stipend (greater than)</label>
-        <input id="stip" type="number" min="0" inputmode="numeric"></div>
-      <div class="field"><label for="year">Stipend year</label>
-        <select id="year">
-          <option value="3">Stipend Year 1</option>
-          <option value="4">Stipend Year 2</option>
-          <option value="5">Stipend Year 3</option>
-        </select></div>
+      <div class="field"><span class="lbl" id="stiplbl">Stipend (year and greater than)</span>
+        <div class="pair" role="group" aria-labelledby="stiplbl">
+          <select id="year" aria-label="Stipend year">
+            <option value="3">Year 1</option>
+            <option value="4">Year 2</option>
+            <option value="5">Year 3</option>
+          </select>
+          <input id="stip" type="number" min="0" inputmode="numeric" placeholder="Greater than" aria-label="Stipend greater than">
+        </div></div>
       <div class="field"><label for="bed">BED (greater than)</label>
         <input id="bed" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="course">Course type</label>
+        <select id="course"><option value="">All types</option></select></div>
+      <div class="field"><label for="state">State</label>
+        <select id="state"><option value="">All states</option></select></div>
+      <div class="field"><label for="bondy">Bond Years</label>
+        <select id="bondy"><option value="">All</option></select></div>
+      <div class="field"><label for="bondp">Bond Penalty</label>
+        <select id="bondp"><option value="">All</option></select></div>
+      <div class="field"><span class="lbl">&nbsp;</span>
+        <button type="button" class="clearbtn" id="clear">Clear All</button></div>
     </div>
 
     <div class="toolbar">
@@ -136,7 +162,7 @@ footer a:hover{color:var(--fg)}
         <button type="button" class="chip" data-k="3" aria-pressed="false">Stipend Year 1</button>
         <button type="button" class="chip" data-k="4" aria-pressed="false">Stipend Year 2</button>
         <button type="button" class="chip" data-k="5" aria-pressed="false">Stipend Year 3</button>
-        <button type="button" class="chip" data-k="6" aria-pressed="false">Bond Years</button>
+        <button type="button" class="chip" data-k="6" aria-pressed="false" id="bondsort">Bond Years</button>
         <button type="button" class="chip" data-k="8" aria-pressed="false">BED</button>
       </div>
     </div>
@@ -174,6 +200,10 @@ footer a:hover{color:var(--fg)}
 (function () {
   'use strict';
   var CSV_URL = './all.csv';
+  /* ---- Premium configuration (public values only; secrets live on the backend) ---- */
+  var GOOGLE_CLIENT_ID = '437007721003-6fdslfcbpqed1p2uuits01g1jorks53k.apps.googleusercontent.com';
+  // Paste your deployed Cloudflare Worker address here (see DEPLOYMENT.md), e.g. 'https://seatwise-api.yourname.workers.dev'
+  var API_BASE = '';
   var PER = 50;
   var COLS = ['Course','State','Institute','Stipend Year 1','Stipend Year 2','Stipend Year 3','Bond Years','Bond Penalty','BED'];
   var NUMERIC = {3:1,4:1,5:1,6:1,7:1,8:1};
@@ -212,7 +242,17 @@ footer a:hover{color:var(--fg)}
   }
 
   var DATA = [];   // each: {raw:[9 strings], num:[null|number x9], key:string}
-  var state = { sortKey: null, page: 0 };
+  var state = { sortKey: null, sortDir: 'desc', page: 0 };
+
+  /* Institute type is derived from the Course value in the CSV, ignoring the words NBE, Bond, Stipend and PDF.
+     e.g. "NBE_DIiploma_Government_-_Bond_Stipend.pdf" -> "Diploma Government". Nothing here is hardcoded per type. */
+  var IGNORE_WORDS = { nbe:1, bond:1, stipend:1, pdf:1 };
+  function courseType(course){
+    var parts = String(course).replace(/\.pdf$/i, '').split(/[_\s\-]+/).filter(function(w){
+      return w && !IGNORE_WORDS[w.toLowerCase()] && !/^\d+$/.test(w);
+    }).map(function(w){ return /^di+ploma$/i.test(w) ? 'Diploma' : w; });
+    return parts.join(' ');
+  }
 
   function build(rows){
     var header = rows[0].map(function(h){ return h.trim(); });
@@ -224,32 +264,65 @@ footer a:hover{color:var(--fg)}
       var raw = idx.map(function(k, j){ return (k >= 0 && r[k] != null ? r[k] : '').trim(); });
       var num = raw.map(function(v, j){ return NUMERIC[j] ? toNum(v) : null; });
       var key = (raw[2] + ' ' + raw[1] + ' ' + raw[0]).toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-      return { raw: raw, num: num, key: key };
+      return { raw: raw, num: num, key: key, ckey: key.replace(/ /g, ''), type: courseType(raw[0]) };
     }).filter(function(r){ return r.raw.some(function(v){ return v !== ''; }); });
+  }
+
+  /* Fill the dropdowns from the loaded CSV so they always match the latest data. */
+  function fillSelect(id, items, allLabel){
+    var el = $(id), prev = el.value;
+    el.innerHTML = '<option value="">' + esc(allLabel) + '</option>' + items.map(function(it){
+      return '<option value="' + esc(it[0]) + '">' + esc(it[1]) + '</option>';
+    }).join('');
+    el.value = items.some(function(it){ return it[0] === prev; }) ? prev : '';
+  }
+  function uniq(list){ var seen = {}, out = []; list.forEach(function(v){ if (v !== '' && !seen[v]){ seen[v] = 1; out.push(v); } }); return out; }
+  function populateFilters(){
+    var types = uniq(DATA.map(function(r){ return r.type; })).sort();
+    fillSelect('course', types.map(function(t){ return [t, t]; }), 'All types');
+    fillSelect('state', uniq(DATA.map(function(r){ return r.raw[1]; })).sort().map(function(s){ return [s, s]; }), 'All states');
+    var by = uniq(DATA.filter(function(r){ return r.num[6] != null; }).map(function(r){ return String(r.num[6]); })).sort(function(a, b){ return a - b; });
+    fillSelect('bondy', by.map(function(v){ return [v, v]; }), 'All');
+    var seen = {}, pen = [];
+    DATA.forEach(function(r){ if (r.raw[7] !== '' && !seen[r.raw[7]]){ seen[r.raw[7]] = 1; pen.push(r); } });
+    pen.sort(function(a, b){ return (toNum(a.raw[7]) || 0) - (toNum(b.raw[7]) || 0); });
+    fillSelect('bondp', pen.map(function(r){ return [r.raw[7], r.raw[7]]; }), 'All');
   }
 
   function norm(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
   function filtered(){
-    var toks = norm($('q').value).split(' ').filter(Boolean);
+    var qn = norm($('q').value);
+    var toks = qn.split(' ').filter(Boolean);
+    var qc = qn.replace(/ /g, '');
     var yr = Number($('year').value);
     var sv = $('stip').value === '' ? null : Number($('stip').value);
     var bv = $('bed').value === '' ? null : Number($('bed').value);
+    var fc = $('course').value, fs = $('state').value, fy = $('bondy').value, fp = $('bondp').value;
     var out = DATA.filter(function(r){
       if (sv != null && !(r.num[yr] != null && r.num[yr] > sv)) return false;
       if (bv != null && !(r.num[8] != null && r.num[8] > bv)) return false;
-      for (var t = 0; t < toks.length; t++) if (r.key.indexOf(toks[t]) === -1) return false;
+      if (fc !== '' && r.type !== fc) return false;
+      if (fs !== '' && r.raw[1] !== fs) return false;
+      if (fy !== '' && r.num[6] !== Number(fy)) return false;
+      if (fp !== '' && r.raw[7] !== fp) return false;
+      if (toks.length){
+        // substring match anywhere (each word, any order) or the whole query ignoring spaces/punctuation
+        var all = true;
+        for (var t = 0; t < toks.length; t++) if (r.key.indexOf(toks[t]) === -1){ all = false; break; }
+        if (!all && r.ckey.indexOf(qc) === -1) return false;
+      }
       return true;
     });
     if (state.sortKey != null){
-      var k = state.sortKey;
+      var k = state.sortKey, asc = state.sortDir === 'asc';
       out = out.map(function(r, i){ return [r, i]; }).sort(function(a, b){
         var x = a[0].num[k], y = b[0].num[k];
         if (x == null && y == null) return a[1] - b[1];
         if (x == null) return 1;
         if (y == null) return -1;
-        return (y - x) || (a[1] - b[1]);
+        return (asc ? (x - y) : (y - x)) || (a[1] - b[1]);
       }).map(function(p){ return p[0]; });
     }
     return out;
@@ -274,6 +347,7 @@ footer a:hover{color:var(--fg)}
     Array.prototype.forEach.call(document.querySelectorAll('#sort .chip'), function(b){
       b.setAttribute('aria-pressed', String(Number(b.dataset.k) === state.sortKey));
     });
+    $('bondsort').textContent = state.sortKey === 6 ? (state.sortDir === 'asc' ? 'Bond Years ↑ low to high' : 'Bond Years ↓ high to low') : 'Bond Years';
   }
 
   function showError(msg){
@@ -290,7 +364,8 @@ footer a:hover{color:var(--fg)}
     s.className = 'status';
     s.innerHTML = '<div class="spin" aria-hidden="true"></div><h2>Loading the latest data…</h2><p>Fetching the college list.</p>';
     s.hidden = false; $('app').hidden = true;
-    fetch(CSV_URL, { cache: 'no-cache' }).then(function(res){
+    // Cache-busting: a fresh query string on every load plus no-store, so a replaced all.csv is always picked up.
+    fetch(CSV_URL + '?v=' + Date.now(), { cache: 'no-store' }).then(function(res){
       if (!res.ok) throw new Error('all.csv returned HTTP ' + res.status + '. Make sure it sits next to index.html.');
       return res.text();
     }).then(function(text){
@@ -300,6 +375,8 @@ footer a:hover{color:var(--fg)}
       var missing = COLS.filter(function(c){ return header.indexOf(c) === -1; });
       if (missing.length) throw new Error('all.csv is missing columns: ' + missing.join(', ') + '.');
       build(rows);
+      if (!DATA.length) throw new Error('all.csv has no usable data rows.');
+      populateFilters();
       $('thead').innerHTML = COLS.map(function(c, j){ return '<th' + (j > 2 ? ' class="num"' : '') + '>' + esc(c) + '</th>'; }).join('');
       state.page = 0;
       s.hidden = true; $('app').hidden = false;
@@ -312,93 +389,226 @@ footer a:hover{color:var(--fg)}
   }
 
   ['q','stip','bed'].forEach(function(id){ $(id).addEventListener('input', function(){ state.page = 0; render(); }); });
-  $('year').addEventListener('change', function(){ state.page = 0; render(); });
+  ['year','course','state','bondy','bondp'].forEach(function(id){ $(id).addEventListener('change', function(){ state.page = 0; render(); }); });
+  $('clear').addEventListener('click', function(){
+    ['q','stip','bed'].forEach(function(id){ $(id).value = ''; });
+    ['course','state','bondy','bondp'].forEach(function(id){ $(id).value = ''; });
+    $('year').value = '3';
+    state.sortKey = null; state.sortDir = 'desc'; state.page = 0; render();
+  });
   $('sort').addEventListener('click', function(e){
     var b = e.target.closest('.chip'); if (!b) return;
     var k = Number(b.dataset.k);
-    state.sortKey = state.sortKey === k ? null : k; state.page = 0; render();
+    if (k === 6){
+      // Bond Years: first click low to high, each further click reverses the order
+      if (state.sortKey === 6) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortKey = 6; state.sortDir = 'asc'; }
+    } else {
+      state.sortDir = 'desc';
+      state.sortKey = state.sortKey === k ? null : k;
+    }
+    state.page = 0; render();
   });
   $('prev').addEventListener('click', function(){ state.page--; render(); window.scrollTo(0, 0); });
   $('next').addEventListener('click', function(){ state.page++; render(); window.scrollTo(0, 0); });
 
   /* ---- Local pages and hash routing (no external navigation) ---- */
-  // Set this to your own address to enable the contact form. Leave empty to show a notice instead.
-  var CONTACT_EMAIL = '';
+  var CONTACT_EMAIL = 'seatwise01@gmail.com';
+  var UPDATED = '14 November 2026';
+
+  /* ---- Premium: Google sign-in + Razorpay, verified by the backend ---- */
+  var P = { token: null, user: null, msg: '', cls: '', busy: false, ready: false };
+  try { P.token = localStorage.getItem('sw_session'); } catch (e) {}
+  function saveToken(t){ P.token = t; try { if (t) localStorage.setItem('sw_session', t); else localStorage.removeItem('sw_session'); } catch (e) {} }
+  function loadScript(src){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script'); s.src = src; s.async = true;
+      s.onload = resolve; s.onerror = function(){ reject(new Error('Could not load ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  function api(path, body){
+    if (!API_BASE) return Promise.reject(new Error('The Premium service is not connected yet.'));
+    var opts = { method: body === undefined ? 'GET' : 'POST', headers: {} };
+    if (P.token) opts.headers['Authorization'] = 'Bearer ' + P.token;
+    if (body !== undefined){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    return fetch(API_BASE.replace(/\/+$/, '') + path, opts).then(function(res){
+      return res.json().catch(function(){ return {}; }).then(function(j){
+        if (res.status === 401 && P.token){ saveToken(null); P.user = null; }
+        if (!res.ok) { var e = new Error(j.error || ('Request failed (' + res.status + ')')); e.status = res.status; throw e; }
+        return j;
+      });
+    });
+  }
+  function setMsg(m, cls){ P.msg = m || ''; P.cls = cls || ''; if (currentRoute() === 'premium') renderPremium(); }
+  function refreshUser(){
+    if (!P.token || !API_BASE){ P.ready = true; return Promise.resolve(); }
+    return api('/me').then(function(j){ P.user = j.user; }).catch(function(){ P.user = null; }).then(function(){ P.ready = true; if (currentRoute() === 'premium') renderPremium(); });
+  }
+  function onGoogle(resp){
+    setMsg('Signing you in…');
+    api('/auth/google', { credential: resp.credential }).then(function(j){
+      saveToken(j.token); P.user = j.user; setMsg('');
+    }).catch(function(e){ setMsg('Sign-in failed: ' + e.message, 'err'); });
+  }
+  function mountGoogle(){
+    var holder = $('gbtn'); if (!holder) return;
+    if (!API_BASE){ return; }
+    loadScript('https://accounts.google.com/gsi/client').then(function(){
+      if (!window.google || !google.accounts || !$('gbtn')) return;
+      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogle });
+      google.accounts.id.renderButton($('gbtn'), { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'rectangular' });
+    }).catch(function(){ setMsg('Could not load Google sign-in. Check your connection and try again.', 'err'); });
+  }
+  function signOut(){
+    saveToken(null); P.user = null; P.msg = ''; P.cls = '';
+    try { if (window.google && google.accounts) google.accounts.id.disableAutoSelect(); } catch (e) {}
+    renderPremium();
+  }
+  function saveUsername(){
+    var v = $('uname').value.trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(v)){ setMsg('Username must be 3 to 20 characters: letters, numbers or underscore.', 'err'); return; }
+    api('/username', { username: v }).then(function(j){ P.user = j.user; setMsg('Username saved.', 'ok'); })
+      .catch(function(e){ setMsg(e.message, 'err'); });
+  }
+  function buy(){
+    if (P.busy) return; P.busy = true; setMsg('Opening secure checkout…');
+    var done = function(){ P.busy = false; };
+    Promise.all([api('/order', {}), loadScript('https://checkout.razorpay.com/v1/checkout.js')]).then(function(r){
+      var o = r[0];
+      var rzp = new Razorpay({
+        key: o.key_id, amount: o.amount, currency: o.currency, order_id: o.order_id,
+        name: 'Seatwise', description: 'Premium membership',
+        prefill: { email: P.user && P.user.email ? P.user.email : '' },
+        theme: { color: '#111111' },
+        handler: function(res){
+          setMsg('Payment received. Verifying with our server…');
+          api('/verify', { razorpay_order_id: res.razorpay_order_id, razorpay_payment_id: res.razorpay_payment_id, razorpay_signature: res.razorpay_signature })
+            .then(function(j){ P.user = j.user; done(); setMsg('Payment verified. You are now a Premium member.', 'ok'); })
+            .catch(function(e){ done(); setMsg('We could not verify your payment (' + e.message + '). Premium has not been activated. If money was debited, write to ' + CONTACT_EMAIL + ' with payment ID ' + res.razorpay_payment_id + '.', 'err'); });
+        },
+        modal: { ondismiss: function(){ done(); setMsg('Checkout closed. Premium has not been activated.'); } }
+      });
+      rzp.on('payment.failed', function(res){
+        done(); var d = res && res.error && res.error.description ? res.error.description : 'The payment did not go through.';
+        setMsg('Payment failed: ' + d + ' Premium has not been activated.', 'err');
+      });
+      setMsg(''); rzp.open();
+    }).catch(function(e){ done(); setMsg(e.message, 'err'); });
+  }
+  function renderPremium(){
+    var el = $('page'); if (!el || currentRoute() !== 'premium') return;
+    var h = '<div class="prem"><h1>Premium</h1>';
+    if (!API_BASE){
+      h += '<p class="sub">Premium is not available yet.</p><div class="note">The Premium service has not been connected. Set <code>API_BASE</code> in index.html after deploying the backend.</div></div>';
+      el.innerHTML = h; return;
+    }
+    if (!P.ready){ el.innerHTML = h + '<p class="sub">Loading…</p></div>'; return; }
+    var u = P.user;
+    if (!u){
+      h += '<p class="sub">Sign in with Google to continue.</p><div id="gbtn" style="min-height:44px"></div>';
+    } else if (!u.username){
+      h += '<p class="sub">Signed in as ' + esc(u.email) + '. Choose a username to continue.</p>' +
+        '<div class="field"><label for="uname">Username</label><input id="uname" type="search" autocomplete="off" maxlength="20" placeholder="3 to 20 letters, numbers or _"></div>' +
+        '<div class="row"><button class="btn" type="button" id="usave">Save username</button><button class="btn sec" type="button" id="sout">Sign out</button></div>';
+    } else {
+      h += '<div class="row"><span class="who">' + esc(u.username) + (u.premium ? '<span class="tick" title="Verified Premium member" aria-label="Verified Premium member">✓</span>' : '') + '</span>' +
+        '<button class="btn sec" type="button" id="sout">Sign out</button></div>';
+      if (u.premium) h += '<p class="sub">You are a verified Premium member. Your membership is linked to ' + esc(u.email) + '.</p>';
+      else h += '<p class="sub">Become a Premium member with a one-time payment.</p><div class="row"><button class="btn" type="button" id="buy">Buy Premium – ₹10</button></div>';
+    }
+    h += '<div class="msg ' + P.cls + '" role="status" aria-live="polite">' + esc(P.msg) + '</div></div>';
+    el.innerHTML = h;
+    if (!u) mountGoogle();
+    if ($('sout')) $('sout').addEventListener('click', signOut);
+    if ($('usave')) { $('usave').addEventListener('click', saveUsername); $('uname').addEventListener('keydown', function(e){ if (e.key === 'Enter') saveUsername(); }); }
+    if ($('buy')) $('buy').addEventListener('click', buy);
+  }
+
+  function policy(title, sub, sections){
+    return '<h1>' + title + '</h1><p class="sub">' + sub + '</p>' + sections.map(function(s){
+      return '<h2>' + s[0] + '</h2>' + s[1].map(function(p){
+        return p.charAt(0) === '*' ? '<ul>' + p.slice(1).split('|').map(function(li){ return '<li>' + li + '</li>'; }).join('') + '</ul>' : '<p>' + p + '</p>';
+      }).join('');
+    }).join('') + '<p>Last updated: ' + UPDATED + '</p>';
+  }
+  var MAIL = '<a href="mailto:' + CONTACT_EMAIL + '">' + CONTACT_EMAIL + '</a>';
 
   var PAGES = {
     contact: { title: 'Contact', html: function(){
-      var has = !!CONTACT_EMAIL;
-      return '<h1>Contact</h1><p class="sub">Questions, corrections or feedback about the listings? Send us a message.</p>' +
-        (has ? '<p>You can also write to <strong style="color:var(--fg)">' + esc(CONTACT_EMAIL) + '</strong>.</p>' : '') +
-        '<form id="cform" novalidate>' +
-        '<div class="field"><label for="cname">Your name</label><input id="cname" type="search" autocomplete="name"></div>' +
-        '<div class="field"><label for="cmail">Your email</label><input id="cmail" type="search" autocomplete="email"></div>' +
-        '<div class="field"><label for="cmsg">Message</label><textarea id="cmsg"></textarea></div>' +
-        '<button class="btn" type="submit"' + (has ? '' : ' disabled') + '>Send message</button>' +
-        '<div id="cresult" role="status"></div></form>' +
-        (has ? '' : '<div class="note">The contact address has not been configured yet. Set <code>CONTACT_EMAIL</code> in index.html to enable this form.</div>');
+      return '<div class="contact"><div class="ico" aria-hidden="true">🩺</div><h1>Contact</h1><p><a href="mailto:' + CONTACT_EMAIL + '">' + CONTACT_EMAIL + '</a></p></div>';
     }},
-    terms: { title: 'Terms and Conditions', html: function(){ return '<h1>Terms and Conditions</h1>' +
-      '<p class="sub">Please read these terms before using Seatwise.</p>' +
-      '<h2>About the service</h2><p>Seatwise lists NEET PG institute information such as stipend, bond and bed counts so that candidates can search and compare institutes.</p>' +
-      '<h2>Accuracy of information</h2><p>The data comes from published stipend and bond documents and may contain errors or be out of date. Always confirm details with the institute or the official notification before making a decision.</p>' +
-      '<h2>Use of the site</h2><ul><li>You may use the site for personal, non-commercial research.</li><li>You may not copy the site at scale or use it in a way that disrupts it.</li></ul>' +
-      '<h2>Liability</h2><p>The information is provided as is, without warranties. Seatwise is not responsible for decisions made on the basis of it.</p>' +
-      '<h2>Changes</h2><p>These terms may be updated from time to time. Continued use of the site means you accept the current terms.</p>'; }},
-    privacy: { title: 'Privacy Policy', html: function(){ return '<h1>Privacy Policy</h1>' +
-      '<p class="sub">How Seatwise treats your information.</p>' +
-      '<h2>What we collect</h2><p>The listings page runs entirely in your browser. Your searches and filters are not sent anywhere or stored.</p>' +
-      '<h2>Messages you send</h2><p>If you contact us, we use the details you provide only to reply to you.</p>' +
-      '<h2>Third parties</h2><p>Your host may keep standard server logs, such as IP address and browser type, as part of delivering the site.</p>' +
-      '<h2>Questions</h2><p>For anything about privacy, use the <a href="#contact">Contact</a> page.</p>'; }},
-    refunds: { title: 'Cancellation and Refund Policy', html: function(){ return '<h1>Cancellation and Refund Policy</h1>' +
-      '<p class="sub">Payments and refunds.</p>' +
-      '<h2>Current status</h2><p>The institute listings on Seatwise are free to use, so there is nothing to cancel and no payment to refund.</p>' +
-      '<h2>If paid features are added</h2><p>Cancellation and refund terms will be published here before any paid feature becomes available.</p>' +
-      '<h2>Questions</h2><p>Reach us through the <a href="#contact">Contact</a> page.</p>'; }},
-    shipping: { title: 'Shipping and Exchange Policy', html: function(){ return '<h1>Shipping and Exchange Policy</h1>' +
-      '<p class="sub">Physical goods and exchanges.</p>' +
-      '<h2>Digital service only</h2><p>Seatwise is a digital information service. It does not sell or ship physical products, so no shipping or exchanges apply.</p>' +
-      '<h2>Questions</h2><p>Reach us through the <a href="#contact">Contact</a> page.</p>'; }}
+    premium: { title: 'Premium', html: function(){ return ''; }},
+    terms: { title: 'Terms and Conditions', html: function(){ return policy('Terms and Conditions', 'Please read these terms before using Seatwise.', [
+      ['1. About Seatwise', ['Seatwise is a digital information website that lets NEET PG candidates search, filter and compare institutes by details such as stipend, bond, bond penalty and bed count. By using the website you agree to these Terms and Conditions. If you do not agree, please do not use it.']],
+      ['2. Eligibility', ['The listings are free for anyone to browse. To create a Premium account you must be at least 18 years old, or use the website under the supervision of a parent or guardian, and be legally able to enter into a contract under the Indian Contract Act, 1872. You must have a valid Google account.']],
+      ['3. Your responsibilities', ['*Provide accurate information when signing in and choosing a username.|Keep access to your Google account secure. Activity under your account is your responsibility.|Choose a username that is lawful and not offensive or misleading, and does not impersonate another person.|Do not misuse the website, including attempting to bypass payment, tamper with premium status, interfere with its operation, or access it by automated means at scale.|Do not copy, scrape, resell or republish the data in bulk without our written permission.']],
+      ['4. Use of the website', ['You may use Seatwise for personal, non-commercial research about your own admission choices. We may change, suspend or withdraw any part of the website at any time, and we may suspend or remove an account that breaks these terms.']],
+      ['5. Premium membership and payments', ['Premium membership is offered for a payment shown on the Premium page (currently ₹10), made through the Razorpay payment gateway. Premium status is activated only after the payment has been verified by our server and is linked to the Google account used to buy it. Payments are governed by our <a href="#refunds">Cancellation and Refund Policy</a>.']],
+      ['6. Intellectual property', ['The Seatwise name, website design, layout and the way the information is compiled and presented belong to Seatwise. Underlying figures originate from published stipend and bond documents of the respective institutes and authorities, which remain the property of their respective owners. You receive a limited, personal, non-transferable licence to use the website; no other rights are granted.']],
+      ['7. Accuracy and disclaimer', ['The information is compiled from published stipend and bond documents and may contain errors, omissions or be out of date. Seatwise is an independent information service. It is not affiliated with, endorsed by or acting for the National Board of Examinations in Medical Sciences, the National Medical Commission, any government or any institute. Always confirm details with the institute and the official notification before making any admission, financial or career decision. The website is provided on an "as is" and "as available" basis without warranties of any kind, to the extent permitted by law.']],
+      ['8. Limitation of liability', ['To the extent permitted by applicable law, Seatwise will not be liable for any indirect, incidental or consequential loss, or for any loss arising from decisions made on the basis of the information on the website, or from interruptions or errors in the service. Nothing in these terms excludes any right you have under the Consumer Protection Act, 2019 or any other law that cannot be excluded.']],
+      ['9. Third-party services', ['Sign-in is provided by Google and payments by Razorpay. Their own terms and privacy policies apply to your use of those services. See our <a href="#privacy">Privacy Policy</a>.']],
+      ['10. Changes to these terms', ['We may update these terms from time to time. The date above shows when they were last changed. Continued use of the website after a change means you accept the updated terms.']],
+      ['11. Governing law', ['These terms are governed by the laws of India. Disputes will be subject to the jurisdiction of the competent courts in India.']],
+      ['12. Contact', ['Questions about these terms: ' + MAIL + '.']]
+    ]); }},
+    privacy: { title: 'Privacy Policy', html: function(){ return policy('Privacy Policy', 'How Seatwise collects, uses and protects your information.', [
+      ['1. Overview', ['This policy explains what personal data Seatwise handles and why. We handle it in line with the Information Technology Act, 2000 and the Digital Personal Data Protection Act, 2023, and we collect only what is needed to run the website and Premium membership.']],
+      ['2. Browsing the listings', ['The institute listings run in your browser. Your searches, filters and sorting choices stay in your browser and are not sent to us or stored.']],
+      ['3. Information we collect when you use Premium', ['*Google sign-in data: your email address, your Google account identifier and, if provided, your name. We use Google Sign-In only to identify you; we do not receive your Google password and we do not access your contacts, Gmail, Drive or other Google data.|Username: the name you choose on the Premium page.|Premium status: whether your membership is verified, the time of activation, and the Razorpay order and payment reference numbers.|Basic technical logs: such as IP address and browser type, which our hosting and backend providers may record for security and reliability.']],
+      ['4. Payment information', ['Payments are processed by Razorpay. Your card, UPI, net banking or wallet details are entered on Razorpay\'s checkout and are never received or stored by Seatwise. We receive only confirmation of the payment and its reference numbers.']],
+      ['5. How we use your information', ['*To sign you in and keep you signed in.|To show your username and apply your Premium status.|To verify payments and restore your Premium membership when you sign in again with the same Google account.|To respond to messages sent to us, and to detect and prevent misuse or fraud.']],
+      ['6. Cookies and local storage', ['Seatwise does not use advertising or analytics cookies. After you sign in, a sign-in token is kept in your browser\'s local storage so that you stay signed in; it is removed when you sign out. Google and Razorpay may set their own cookies or similar technologies when their sign-in or checkout appears, under their own policies.']],
+      ['7. Where your data is stored', ['Account and Premium records are stored with our backend provider, Cloudflare, which may process data on servers located outside India. We keep this data only as long as your account exists or as needed to meet legal, accounting and dispute-resolution requirements.']],
+      ['8. Third-party services', ['*Google LLC (Google Sign-In)|Razorpay Software Private Limited (payments)|Cloudflare, Inc. (backend hosting and storage)|The provider that hosts this website (for example GitHub Pages), which may keep standard server logs']],
+      ['9. Sharing', ['We do not sell your personal data. We share it only with the service providers above as needed to run the website, or where the law requires.']],
+      ['10. Your rights', ['Subject to applicable law, you may ask us to give you a summary of the personal data we hold about you, correct it, or erase it, and you may withdraw your consent at any time. You may also nominate another person to exercise these rights for you. To make a request, write to ' + MAIL + ' from the email address linked to your account. Erasing your account will also remove your Premium status. If you are not satisfied with our response, you may complain to the Data Protection Board of India once it is operational.']],
+      ['11. Security', ['Payment confirmation and Premium status are checked and stored on our server, not in your browser. No system is completely secure, so we cannot guarantee absolute security.']],
+      ['12. Children', ['Premium accounts are meant for adults. We do not knowingly collect personal data from children.']],
+      ['13. Changes and grievances', ['We may update this policy and will change the date above when we do. For privacy questions or grievances, write to ' + MAIL + '.']]
+    ]); }},
+    refunds: { title: 'Cancellation and Refund Policy', html: function(){ return policy('Cancellation and Refund Policy', 'Payments, cancellations and refunds for Seatwise Premium.', [
+      ['1. What you pay for', ['Browsing the institute listings is free. Premium membership is a digital service purchased through a single payment of ₹10 (Indian Rupees) on the Premium page.']],
+      ['2. How payment works', ['*Payments are made through Razorpay using the methods Razorpay offers at checkout, such as UPI, cards, net banking and wallets.|The amount charged is exactly the price shown on the Premium page.|Premium is activated only after our server verifies the payment with Razorpay. Until then, no membership is granted.|Your membership is linked to the Google account you were signed in with when paying.']],
+      ['3. Cancellation', ['You can cancel before paying by closing the checkout window; nothing is charged and no membership is activated. Because Premium is a digital service that is activated as soon as payment is verified, it cannot be cancelled for a refund once activated, except as set out below.']],
+      ['4. Refund eligibility', ['We will refund a payment in these cases:', '*You were charged more than once for the same purchase (duplicate payment).|Money was debited from your account but Premium was not activated on your account.|A payment was taken in error because of a technical fault on our side.', 'We do not offer refunds for a change of mind after Premium has been activated. This does not affect any right you have under the Consumer Protection Act, 2019 or other applicable law.']],
+      ['5. How to request a refund', ['Write to ' + MAIL + ' from your registered email address and include the Razorpay payment ID (shown on your payment receipt or bank message), the date of payment and a short description of the problem. We may ask for additional details to confirm the payment.']],
+      ['6. Refund processing', ['Approved refunds are returned to the original payment method through Razorpay. Once we initiate a refund, the time it takes to appear depends on your bank or payment provider, and is typically a few working days. If a refund is issued, Premium status linked to that payment will be removed.']],
+      ['7. Questions', ['For anything about payments or refunds, write to ' + MAIL + '.']]
+    ]); }},
+    shipping: { title: 'Shipping and Exchange Policy', html: function(){ return policy('Shipping and Exchange Policy', 'Delivery of Seatwise services.', [
+      ['1. Digital platform only', ['Seatwise is a digital information platform. We do not sell, ship or deliver any physical products, so physical shipping, delivery charges and exchanges of goods do not apply.']],
+      ['2. How Premium is delivered', ['Premium membership is delivered electronically. Once your payment is verified, Premium status is applied to your account immediately and a verification tick appears beside your username on the Premium page. No physical item or document is sent to you.']],
+      ['3. Exchanges', ['Because nothing physical is supplied, there is nothing to exchange. Premium membership cannot be exchanged or transferred to another account. Refunds, where applicable, are covered by our <a href="#refunds">Cancellation and Refund Policy</a>.']],
+      ['4. If Premium does not appear', ['If you have paid but Premium does not show after signing in with the same Google account, write to ' + MAIL + ' with your Razorpay payment ID and we will look into it.']]
+    ]); }}
   };
 
+  function currentRoute(){ return (location.hash || '#home').replace(/^#/, ''); }
+
   function route(){
-    var h = (location.hash || '#home').replace(/^#/, '');
+    var h = currentRoute();
     var p = PAGES.hasOwnProperty(h) ? PAGES[h] : null;
     $('home').hidden = !!p;
     $('page').hidden = !p;
     $('nav-home').classList.toggle('active', !p);
+    $('nav-premium').classList.toggle('active', h === 'premium');
     $('nav-contact').classList.toggle('active', h === 'contact');
     if (p){
       $('page').innerHTML = p.html();
       document.title = p.title + ' — Seatwise';
-      if (h === 'contact') bindContact();
+      if (h === 'premium') renderPremium();
     } else {
       document.title = 'Seatwise — NEET PG institute information';
     }
     window.scrollTo(0, 0);
   }
 
-  function bindContact(){
-    var f = $('cform');
-    f.addEventListener('submit', function(e){
-      e.preventDefault();
-      var r = $('cresult'), name = $('cname').value.trim(), mail = $('cmail').value.trim(), msg = $('cmsg').value.trim();
-      if (!CONTACT_EMAIL){ return; }
-      if (!name || !/^\S+@\S+\.\S+$/.test(mail) || !msg){
-        r.textContent = 'Please enter your name, a valid email and a message.';
-        return;
-      }
-      var body = msg + '\n\nFrom: ' + name + ' <' + mail + '>';
-      var href = 'mailto:' + encodeURIComponent(CONTACT_EMAIL) + '?subject=' + encodeURIComponent('Seatwise enquiry from ' + name) + '&body=' + encodeURIComponent(body);
-      r.textContent = 'Your email app should open with the message ready to send. If it does not, write to ' + CONTACT_EMAIL + '.';
-      location.href = href;
-    });
-  }
-
   window.addEventListener('hashchange', route);
   route();
   load();
+  refreshUser();
 })();
 </script>
 </body>
